@@ -2,6 +2,36 @@
 
 Analyze inclusion relationships between Git repositories, starting from a root repository.
 
+# Installation
+
+Install the `gitdag` command in `/usr/local/bin`:
+
+```sh
+make install
+```
+
+Use `PREFIX` to select another installation prefix:
+
+```sh
+make install PREFIX=/custom/prefix
+```
+
+# Usage
+
+Run `gitdag` without arguments to analyze the current directory:
+
+```sh
+gitdag
+```
+
+Pass a component or repository to analyze another root:
+
+```sh
+gitdag ../faust/compiler
+```
+
+Run `gitdag --help` to see all available options.
+
 # Dependency Status Format
 
 This document describes the format produced by `gitdag`.

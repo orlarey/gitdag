@@ -398,7 +398,8 @@ def committed_tree_manifest(
     except ValueError:
         return None, None, f"{component} is not located inside {repo}"
 
-    tree_result = run_git(repo, "rev-parse", f"HEAD:{relative}")
+    tree_spec = "HEAD^{tree}" if relative == "." else f"HEAD:{relative}"
+    tree_result = run_git(repo, "rev-parse", tree_spec)
     if tree_result.returncode != 0:
         return (
             None,
@@ -1281,10 +1282,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "root",
+        nargs="?",
         type=Path,
+        default=Path("."),
         help=(
             "Root component or repository. A /work/interval repository "
             "containing /work/interval/interval is normalized automatically."
+            " Defaults to the current directory."
         ),
     )
     parser.add_argument(

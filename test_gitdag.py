@@ -12,6 +12,7 @@ from gitdag import (
     GraphDiscoverer,
     GraphResult,
     Node,
+    build_parser,
     inspect_component_state,
     topological_order,
     tree_manifest,
@@ -96,6 +97,25 @@ class TreeManifestTests(unittest.TestCase):
             settings.write_text("{}\n", encoding="utf-8")
 
             state = inspect_component_state(repository, component)
+
+            self.assertEqual(state.state, "clean")
+            self.assertIsNone(state.error)
+
+    def test_repository_root_can_be_inspected_as_component(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            repository = Path(temporary_directory)
+            (repository / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+            commands = [
+                ["git", "init", "--quiet"],
+                ["git", "config", "user.name", "Gitdag Tests"],
+                ["git", "config", "user.email", "gitdag@example.invalid"],
+                ["git", "add", "tracked.txt"],
+                ["git", "commit", "--quiet", "-m", "Initial commit"],
+            ]
+            for command in commands:
+                subprocess.run(command, cwd=repository, check=True)
+
+            state = inspect_component_state(repository, repository)
 
             self.assertEqual(state.state, "clean")
             self.assertIsNone(state.error)
@@ -318,6 +338,13 @@ class TopologicalOrderTests(unittest.TestCase):
         )
 
         self.assertEqual(topological_order(result), ["a", "z", "b"])
+
+
+class CommandLineTests(unittest.TestCase):
+    def test_root_defaults_to_current_directory(self) -> None:
+        arguments = build_parser().parse_args([])
+
+        self.assertEqual(arguments.root, Path("."))
 
 
 if __name__ == "__main__":
