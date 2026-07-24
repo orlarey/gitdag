@@ -1229,6 +1229,14 @@ def compact_copy_label(copy: CopyState) -> str:
     return labels.get(copy.state, f"{copy.state}:{base}")
 
 
+def repository_state_label(git: GitState) -> str:
+    if git.clean is True:
+        return "clean"
+    if git.clean is False:
+        return "dirty"
+    return "unknown"
+
+
 def print_human_report(result: GraphResult) -> None:
     """Print exactly one line per module and one per dependency."""
     order = topological_order(result)
@@ -1247,7 +1255,8 @@ def print_human_report(result: GraphResult) -> None:
         node = result.nodes[identifier]
         print(
             f"{compact_node_name(node, result)} "
-            f"[{node.component.state}:{short_sha(node.component.commit)}]"
+            f"[{node.component.state}:{short_sha(node.component.commit)}, "
+            f"repo:{repository_state_label(node.git)}]"
         )
 
         edges = sorted(

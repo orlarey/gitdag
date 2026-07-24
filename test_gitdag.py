@@ -1,7 +1,9 @@
+import io
 import os
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from gitdag import (
@@ -14,6 +16,7 @@ from gitdag import (
     Node,
     build_parser,
     inspect_component_state,
+    print_human_report,
     topological_order,
     tree_manifest,
 )
@@ -338,6 +341,57 @@ class TopologicalOrderTests(unittest.TestCase):
         )
 
         self.assertEqual(topological_order(result), ["a", "z", "b"])
+
+
+class HumanReportTests(unittest.TestCase):
+    @staticmethod
+    def report_with_repository_state(repository_clean: bool | None) -> str:
+        node = Node(
+            id="module",
+            name="module",
+            repository="/workspace/module",
+            canonical_path="/workspace/module/module",
+            git=GitState(
+                is_git_repository=repository_clean is not None,
+                clean=repository_clean,
+                commit="1234567890abcdef",
+                branch="main",
+            ),
+            component=ComponentState(
+                state="clean",
+                commit="1234567890abcdef",
+                commit_tree="tree",
+                committed_hash="hash",
+                working_hash="hash",
+            ),
+        )
+        result = GraphResult(
+            workspace="/workspace",
+            root_component=node.id,
+            nodes={node.id: node},
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            print_human_report(result)
+        return output.getvalue()
+
+    def test_clean_repository_is_displayed_systematically(self) -> None:
+        self.assertEqual(
+            self.report_with_repository_state(True),
+            "module/module [clean:12345678, repo:clean]\n",
+        )
+
+    def test_dirty_repository_is_distinct_from_clean_component(self) -> None:
+        self.assertEqual(
+            self.report_with_repository_state(False),
+            "module/module [clean:12345678, repo:dirty]\n",
+        )
+
+    def test_unknown_repository_state_is_displayed(self) -> None:
+        self.assertEqual(
+            self.report_with_repository_state(None),
+            "module/module [clean:12345678, repo:unknown]\n",
+        )
 
 
 class CommandLineTests(unittest.TestCase):

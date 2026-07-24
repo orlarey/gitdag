@@ -60,14 +60,14 @@ Each module occupies:
 For example:
 
 ```text
-DirectedGraph [clean:e5c6c27a]
+DirectedGraph [clean:e5c6c27a, repo:clean]
 
-tlib [clean:50215fb8]
+tlib [clean:50215fb8, repo:clean]
 
-FaustAlgebra [clean:7d0438bf]
+FaustAlgebra [clean:7d0438bf, repo:dirty]
   tlib [WORKING:50215fb8]
 
-compiler [dirty:47196653]
+compiler [dirty:47196653, repo:dirty]
   DirectedGraph [synced:e5c6c27a]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]
@@ -80,15 +80,29 @@ compiler [dirty:47196653]
 The main line describes the state of the canonical module.
 
 ```text
-module_name [state:commit]
+module_name [state:commit, repo:repository_state]
 ```
 
 The commit always corresponds to the **HEAD of the module's Git repository**.
+The component state compares the canonical module directory with `HEAD`, while
+the repository state describes the complete Git working tree:
+
+- `repo:clean`: the complete repository is clean;
+- `repo:dirty`: the repository contains local changes, possibly outside the
+  canonical module directory;
+- `repo:unknown`: the repository state could not be determined.
+
+This distinction makes cases such as a clean canonical module containing a
+modified dependency copy explicit:
+
+```text
+module_name [clean:7826244d, repo:dirty]
+```
 
 ## clean
 
 ```text
-interval [clean:7826244d]
+interval [clean:7826244d, repo:clean]
 ```
 
 The current contents of the canonical directory are identical to those stored in the specified commit.
@@ -110,7 +124,7 @@ The repository may contain changes elsewhere; they are not taken into account.
 ## dirty
 
 ```text
-interval [dirty:7826244d]
+interval [dirty:7826244d, repo:dirty]
 ```
 
 The current contents of the canonical directory differ from those stored in the specified commit.
@@ -284,20 +298,20 @@ Here, the `+` suffix indicates that the divergence is measured against a canonic
 # Reading an Example
 
 ```text
-DirectedGraph [clean:e5c6c27a]
+DirectedGraph [clean:e5c6c27a, repo:clean]
 
-FaustAlgebra [clean:7d0438bf]
+FaustAlgebra [clean:7d0438bf, repo:dirty]
   tlib [WORKING:50215fb8]
 
-interval [dirty:7826244d]
+interval [dirty:7826244d, repo:dirty]
   FaustAlgebra [divergent:7d0438bf]
 
-signals [dirty:71c2c33e]
+signals [dirty:71c2c33e, repo:dirty]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]
   tlib [synced:50215fb8]
 
-compiler [dirty:47196653]
+compiler [dirty:47196653, repo:dirty]
   DirectedGraph [synced:e5c6c27a]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]
