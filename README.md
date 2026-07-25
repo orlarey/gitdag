@@ -60,14 +60,14 @@ Each module occupies:
 For example:
 
 ```text
-DirectedGraph [clean:e5c6c27a, repo:clean]
+DirectedGraph [clean:e5c6c27a, repo:clean, push:pushed]
 
-tlib [clean:50215fb8, repo:clean]
+tlib [clean:50215fb8, repo:clean, push:pushed]
 
-FaustAlgebra [clean:7d0438bf, repo:dirty]
+FaustAlgebra [clean:7d0438bf, repo:dirty, push:pushed]
   tlib [WORKING:50215fb8]
 
-compiler [dirty:47196653, repo:dirty]
+compiler [dirty:47196653, repo:dirty, push:unpushed]
   DirectedGraph [synced:e5c6c27a]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]
@@ -80,7 +80,7 @@ compiler [dirty:47196653, repo:dirty]
 The main line describes the state of the canonical module.
 
 ```text
-module_name [state:commit, repo:repository_state]
+module_name [state:commit, repo:repository_state, push:push_state]
 ```
 
 The commit always corresponds to the **HEAD of the module's Git repository**.
@@ -92,17 +92,30 @@ the repository state describes the complete Git working tree:
   canonical module directory;
 - `repo:unknown`: the repository state could not be determined.
 
+The push state compares `HEAD` with its configured upstream branch:
+
+- `push:pushed`: `HEAD` and its upstream point to the same commit;
+- `push:unpushed`: the local branch contains commits not present upstream;
+- `push:behind`: the upstream contains commits not present locally;
+- `push:diverged`: both branches contain commits missing from the other;
+- `push:unknown`: no usable upstream is configured, or the relationship could
+  not be determined.
+
+This comparison uses the remote-tracking references already available in the
+local repository. `gitdag` does not contact the remote or run `git fetch`, so
+the result reflects the last known remote state.
+
 This distinction makes cases such as a clean canonical module containing a
 modified dependency copy explicit:
 
 ```text
-module_name [clean:7826244d, repo:dirty]
+module_name [clean:7826244d, repo:dirty, push:pushed]
 ```
 
 ## clean
 
 ```text
-interval [clean:7826244d, repo:clean]
+interval [clean:7826244d, repo:clean, push:pushed]
 ```
 
 The current contents of the canonical directory are identical to those stored in the specified commit.
@@ -124,7 +137,7 @@ The repository may contain changes elsewhere; they are not taken into account.
 ## dirty
 
 ```text
-interval [dirty:7826244d, repo:dirty]
+interval [dirty:7826244d, repo:dirty, push:pushed]
 ```
 
 The current contents of the canonical directory differ from those stored in the specified commit.
@@ -298,20 +311,20 @@ Here, the `+` suffix indicates that the divergence is measured against a canonic
 # Reading an Example
 
 ```text
-DirectedGraph [clean:e5c6c27a, repo:clean]
+DirectedGraph [clean:e5c6c27a, repo:clean, push:pushed]
 
-FaustAlgebra [clean:7d0438bf, repo:dirty]
+FaustAlgebra [clean:7d0438bf, repo:dirty, push:pushed]
   tlib [WORKING:50215fb8]
 
-interval [dirty:7826244d, repo:dirty]
+interval [dirty:7826244d, repo:dirty, push:pushed]
   FaustAlgebra [divergent:7d0438bf]
 
-signals [dirty:71c2c33e, repo:dirty]
+signals [dirty:71c2c33e, repo:dirty, push:unpushed]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]
   tlib [synced:50215fb8]
 
-compiler [dirty:47196653, repo:dirty]
+compiler [dirty:47196653, repo:dirty, push:diverged]
   DirectedGraph [synced:e5c6c27a]
   FaustAlgebra [outdated:7d0438bf]
   interval [synced+:7826244d]

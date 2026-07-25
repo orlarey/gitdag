@@ -43,6 +43,10 @@ class GitState:
     clean: bool | None
     commit: str | None
     branch: str | None
+    upstream: str | None = None
+    ahead: int | None = None
+    behind: int | None = None
+    push_state: str = "unknown"
     status_lines: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -144,6 +148,42 @@ def inspect_git_repository(repo: Path) -> GitState:
     status = run_git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     commit = run_git(repo, "rev-parse", "HEAD")
     branch = run_git(repo, "branch", "--show-current")
+    upstream = run_git(
+        repo,
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{upstream}",
+    )
+
+    upstream_name = upstream.stdout.strip() if upstream.returncode == 0 else None
+    ahead: int | None = None
+    behind: int | None = None
+    push_state = "unknown"
+    if upstream_name:
+        counts = run_git(
+            repo,
+            "rev-list",
+            "--left-right",
+            "--count",
+            "@{upstream}...HEAD",
+        )
+        if counts.returncode == 0:
+            fields = counts.stdout.split()
+            if len(fields) == 2:
+                try:
+                    behind, ahead = (int(value) for value in fields)
+                except ValueError:
+                    pass
+                else:
+                    if ahead == 0 and behind == 0:
+                        push_state = "pushed"
+                    elif ahead > 0 and behind == 0:
+                        push_state = "unpushed"
+                    elif ahead == 0 and behind > 0:
+                        push_state = "behind"
+                    else:
+                        push_state = "diverged"
 
     status_lines = [
         line for line in status.stdout.splitlines()
@@ -155,6 +195,10 @@ def inspect_git_repository(repo: Path) -> GitState:
         clean=(status.returncode == 0 and not status_lines),
         commit=commit.stdout.strip() if commit.returncode == 0 else None,
         branch=branch.stdout.strip() if branch.returncode == 0 else None,
+        upstream=upstream_name,
+        ahead=ahead,
+        behind=behind,
+        push_state=push_state,
         status_lines=status_lines,
         error=status.stderr.strip() if status.returncode != 0 else None,
     )
@@ -1237,6 +1281,10 @@ def repository_state_label(git: GitState) -> str:
     return "unknown"
 
 
+def push_state_label(git: GitState) -> str:
+    return git.push_state
+
+
 def print_human_report(result: GraphResult) -> None:
     """Print exactly one line per module and one per dependency."""
     order = topological_order(result)
@@ -1256,7 +1304,8 @@ def print_human_report(result: GraphResult) -> None:
         print(
             f"{compact_node_name(node, result)} "
             f"[{node.component.state}:{short_sha(node.component.commit)}, "
-            f"repo:{repository_state_label(node.git)}]"
+            f"repo:{repository_state_label(node.git)}, "
+            f"push:{push_state_label(node.git)}]"
         )
 
         edges = sorted(

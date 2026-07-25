@@ -16,6 +16,7 @@ from gitdag import (
     Node,
     build_parser,
     inspect_component_state,
+    inspect_git_repository,
     print_human_report,
     topological_order,
     tree_manifest,
@@ -122,6 +123,80 @@ class TreeManifestTests(unittest.TestCase):
 
             self.assertEqual(state.state, "clean")
             self.assertIsNone(state.error)
+
+
+class GitRepositoryStateTests(unittest.TestCase):
+    @staticmethod
+    def run_git(repository: Path, *arguments: str) -> None:
+        subprocess.run(
+            ["git", *arguments],
+            cwd=repository,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    def test_repository_without_upstream_has_unknown_push_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            repository = Path(temporary_directory)
+            (repository / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+            self.run_git(repository, "init", "--quiet")
+            self.run_git(repository, "config", "user.name", "Gitdag Tests")
+            self.run_git(
+                repository,
+                "config",
+                "user.email",
+                "gitdag@example.invalid",
+            )
+            self.run_git(repository, "add", ".")
+            self.run_git(repository, "commit", "--quiet", "-m", "Initial commit")
+
+            state = inspect_git_repository(repository)
+
+            self.assertEqual(state.push_state, "unknown")
+            self.assertIsNone(state.upstream)
+            self.assertIsNone(state.ahead)
+            self.assertIsNone(state.behind)
+
+    def test_pushed_and_unpushed_commits_are_distinguished(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            workspace = Path(temporary_directory)
+            remote = workspace / "remote.git"
+            repository = workspace / "module"
+            remote.mkdir()
+            repository.mkdir()
+            self.run_git(remote, "init", "--bare", "--quiet")
+            self.run_git(repository, "init", "--quiet")
+            self.run_git(repository, "config", "user.name", "Gitdag Tests")
+            self.run_git(
+                repository,
+                "config",
+                "user.email",
+                "gitdag@example.invalid",
+            )
+            (repository / "tracked.txt").write_text("version one\n", encoding="utf-8")
+            self.run_git(repository, "add", ".")
+            self.run_git(repository, "commit", "--quiet", "-m", "Initial commit")
+            self.run_git(repository, "remote", "add", "origin", str(remote))
+            self.run_git(repository, "push", "--quiet", "-u", "origin", "HEAD")
+
+            pushed = inspect_git_repository(repository)
+
+            self.assertEqual(pushed.push_state, "pushed")
+            self.assertIsNotNone(pushed.upstream)
+            self.assertEqual(pushed.ahead, 0)
+            self.assertEqual(pushed.behind, 0)
+
+            (repository / "tracked.txt").write_text("version two\n", encoding="utf-8")
+            self.run_git(repository, "add", ".")
+            self.run_git(repository, "commit", "--quiet", "-m", "Local commit")
+
+            unpushed = inspect_git_repository(repository)
+
+            self.assertTrue(unpushed.clean)
+            self.assertEqual(unpushed.push_state, "unpushed")
+            self.assertEqual(unpushed.ahead, 1)
+            self.assertEqual(unpushed.behind, 0)
 
 
 class ContextualWorkingTests(unittest.TestCase):
@@ -345,7 +420,10 @@ class TopologicalOrderTests(unittest.TestCase):
 
 class HumanReportTests(unittest.TestCase):
     @staticmethod
-    def report_with_repository_state(repository_clean: bool | None) -> str:
+    def report_with_repository_state(
+        repository_clean: bool | None,
+        push_state: str = "unknown",
+    ) -> str:
         node = Node(
             id="module",
             name="module",
@@ -356,6 +434,7 @@ class HumanReportTests(unittest.TestCase):
                 clean=repository_clean,
                 commit="1234567890abcdef",
                 branch="main",
+                push_state=push_state,
             ),
             component=ComponentState(
                 state="clean",
@@ -378,19 +457,25 @@ class HumanReportTests(unittest.TestCase):
     def test_clean_repository_is_displayed_systematically(self) -> None:
         self.assertEqual(
             self.report_with_repository_state(True),
-            "module/module [clean:12345678, repo:clean]\n",
+            "module/module [clean:12345678, repo:clean, push:unknown]\n",
         )
 
     def test_dirty_repository_is_distinct_from_clean_component(self) -> None:
         self.assertEqual(
             self.report_with_repository_state(False),
-            "module/module [clean:12345678, repo:dirty]\n",
+            "module/module [clean:12345678, repo:dirty, push:unknown]\n",
         )
 
     def test_unknown_repository_state_is_displayed(self) -> None:
         self.assertEqual(
             self.report_with_repository_state(None),
-            "module/module [clean:12345678, repo:unknown]\n",
+            "module/module [clean:12345678, repo:unknown, push:unknown]\n",
+        )
+
+    def test_push_state_is_displayed_systematically(self) -> None:
+        self.assertEqual(
+            self.report_with_repository_state(True, "unpushed"),
+            "module/module [clean:12345678, repo:clean, push:unpushed]\n",
         )
 
 
